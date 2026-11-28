@@ -7,8 +7,11 @@ use gloo_timers::future::TimeoutFuture;
 #[component]
 pub fn PersonalizationQueueStatusPanel() -> Element {
     let locale = use_locale();
-    let mut status =
-        use_resource(move || async move { get_assignment_personalization_status().await });
+    let mut status = use_resource(move || async move {
+        get_assignment_personalization_status()
+            .await
+            .map(|summary| (summary, chrono::Utc::now().to_rfc3339()))
+    });
     #[cfg(target_arch = "wasm32")]
     {
         let mut polling = use_signal(|| false);
@@ -17,7 +20,7 @@ pub fn PersonalizationQueueStatusPanel() -> Element {
             let active = status.read().as_ref().is_some_and(|result| {
                 result
                     .as_ref()
-                    .is_ok_and(|summary| summary.queued + summary.running > 0)
+                    .is_ok_and(|(summary, _)| summary.queued + summary.running > 0)
             });
             if !active {
                 observed_active.set(false);
@@ -34,7 +37,7 @@ pub fn PersonalizationQueueStatusPanel() -> Element {
                     let active = status.read().as_ref().is_some_and(|result| {
                         result
                             .as_ref()
-                            .is_ok_and(|summary| summary.queued + summary.running > 0)
+                            .is_ok_and(|(summary, _)| summary.queued + summary.running > 0)
                     });
                     if !active {
                         break;
@@ -75,7 +78,8 @@ pub fn PersonalizationQueueStatusPanel() -> Element {
             "data-testid": "teacher-personalization-status",
             class: "et-ui-card mb-4 space-y-3 p-4",
             div { class: "flex flex-wrap items-center justify-between gap-3",
-                h3 { class: "font-semibold",
+                h3 { class: "flex items-center gap-2 font-semibold",
+                    span { class: "material-icons-outlined text-base", "aria-hidden": "true", "auto_awesome" }
                     "{locale.t(\"teachers.assignments.create.ai_title\")} · {locale.t(\"common.status\")}"
                 }
                 button {
@@ -96,10 +100,10 @@ pub fn PersonalizationQueueStatusPanel() -> Element {
                 Some(Err(_)) => rsx! {
                     p { role: "alert", class: "text-sm", "{locale.t(\"teacher.assignments.status_read_failed\")}" }
                 },
-                Some(Ok(summary)) if summary.total == 0 => rsx! {
+                Some(Ok((summary, _))) if summary.total == 0 => rsx! {
                     p { role: "status", class: "text-sm", "{locale.t(\"common.no_data\")}" }
                 },
-                Some(Ok(summary)) => rsx! {
+                Some(Ok((summary, _))) => rsx! {
                     div { role: "status", class: "flex flex-wrap gap-x-4 gap-y-2 text-sm",
                         span { "{summary.succeeded}/{summary.total} {locale.t(\"assignments.completed\")}" }
                         span { "{summary.queued} {locale.t(\"teacher.assignments.status_queued\")}" }
@@ -124,6 +128,12 @@ pub fn PersonalizationQueueStatusPanel() -> Element {
                         }
                     }
                 },
+            }
+            if let Some(Ok((_, checked_at))) = &*status.read() {
+                p { class: "text-xs", "data-testid": "teacher-personalization-last-checked",
+                    "{locale.t(\"teacher.assignments.last_checked\")}: "
+                    bdi { "data-checked-at": "{checked_at}", {format_product_datetime_text(checked_at, locale.current())} }
+                }
             }
         }
     }

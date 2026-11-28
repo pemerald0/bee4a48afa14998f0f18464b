@@ -17,6 +17,8 @@ pub(crate) fn teacher_assignments_translation(
         (Locale::Fa, "teacher.assignments.status_failed") => Some("نیازمند پیگیری"),
         (Locale::En, "teacher.assignments.status_cancelled") => Some("cancelled"),
         (Locale::Fa, "teacher.assignments.status_cancelled") => Some("لغوشده"),
+        (Locale::En, "teacher.assignments.last_checked") => Some("Last checked"),
+        (Locale::Fa, "teacher.assignments.last_checked") => Some("آخرین بررسی"),
         (Locale::En, "teacher.assignments.last_completed") => Some("Last completed"),
         (Locale::Fa, "teacher.assignments.last_completed") => Some("آخرین تکمیل"),
         (Locale::En, "teacher.assignments.failure_details") => Some("View details"),

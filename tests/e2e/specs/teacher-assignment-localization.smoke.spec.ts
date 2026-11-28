@@ -155,6 +155,7 @@ for (const locale of ['en', 'fa'] as const) {
     const panel = page.getByTestId('teacher-personalization-status');
     const reference = panel.getByTestId('teacher-personalization-support-reference');
     await expect(panel.getByRole('button', {name: locale === 'en' ? 'Refresh status' : 'به‌روزرسانی وضعیت', exact: true})).toBeVisible();
+    await expect(panel.getByTestId('teacher-personalization-last-checked')).toContainText(locale === 'en' ? 'Last checked' : 'آخرین بررسی');
     await expect(reference).toBeHidden();
     await panel.getByText(locale === 'en' ? 'View details' : 'دریافت راهنمایی', {exact: true}).click();
     await expect(reference).toContainText(locale === 'en' ? 'Support reference' : 'شناسه پیگیری پشتیبانی');
@@ -289,7 +290,12 @@ test('admin retry and offline worker completion clear teacher current failure @s
     await expect(panel).toContainText('0 queued', {timeout:15_000});
     await expect(panel.getByTestId('teacher-personalization-support-reference')).toHaveCount(0);
     await expect(panel).not.toContainText('need attention');
+    const lastChecked = panel.getByTestId('teacher-personalization-last-checked').locator('bdi');
+    const beforeRefresh = await lastChecked.getAttribute('data-checked-at');
+    expect(beforeRefresh).not.toBeNull();
     await panel.getByRole('button',{name:'Refresh status',exact:true}).click();
+    await expect.poll(async () => await lastChecked.getAttribute('data-checked-at'))
+      .not.toBe(beforeRefresh);
     await expect(panel).toContainText('0 queued');
     await expect(panel).toContainText('Last completed');
     const focusRead = page.waitForResponse(response =>

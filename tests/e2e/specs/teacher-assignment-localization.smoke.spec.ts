@@ -216,7 +216,7 @@ function fixtureSql(sql: string): string {
   return execFileSync('psql', [databaseUrl, '-v', 'ON_ERROR_STOP=1', '-Atqc', sql], {encoding:'utf8'}).trim();
 }
 
-test('admin retry and offline worker completion clear teacher current failure @smoke @final @teacher @platform-admin @personalization', async ({ page }) => {
+test('admin retry and offline worker completion clear teacher current failure @smoke @final @teacher @platform-admin @personalization', async ({ page }, info) => {
   const assignment = randomUUID();
   const custom = randomUUID();
   const title = 'E2E Teacher Recovery ' + assignment.slice(0, 8);
@@ -233,6 +233,7 @@ test('admin retry and offline worker completion clear teacher current failure @s
     WHERE assignment_id='${assignment}';
     COMMIT;
   `);
+  let journeyError: unknown;
   try {
     const job = fixtureSql(`SELECT id FROM assignment_personalization_jobs WHERE assignment_id='${assignment}'`);
     expect(job).toMatch(/^[0-9a-f-]{36}$/);
@@ -291,7 +292,34 @@ test('admin retry and offline worker completion clear teacher current failure @s
     await panel.getByRole('button',{name:'Refresh status',exact:true}).click();
     await expect(panel).toContainText('0 queued');
     await expect(panel).toContainText('Last completed');
+    const focusRead = page.waitForResponse(response =>
+      new URL(response.url()).pathname === '/api/assignments/personalization_status'
+    );
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    expect((await focusRead).ok()).toBeTruthy();
+  } catch (error) {
+    journeyError = error;
+    throw error;
   } finally {
-    fixtureSql(`DELETE FROM assignments WHERE id='${assignment}'`);
+    // The assignment foreign key is intentionally restrictive. Remove the
+    // isolated child before its parent; never weaken production constraints.
+    // Keep cleanup errors separate from a failed journey assertion.
+    try {
+      fixtureSql(`
+        BEGIN;
+        DELETE FROM custom_assignments WHERE id='${custom}' AND assignment_id='${assignment}';
+        DELETE FROM assignments WHERE id='${assignment}';
+        COMMIT;
+      `);
+      expect(fixtureSql(`SELECT COUNT(*) FROM assignments WHERE id='${assignment}'`)).toBe('0');
+      expect(fixtureSql(`SELECT COUNT(*) FROM assignment_personalization_jobs WHERE assignment_id='${assignment}'`)).toBe('0');
+    } catch (cleanupError) {
+      await info.attach('teacher-recovery-fixture-cleanup-error', {
+        body: String(cleanupError), contentType: 'text/plain',
+      });
+      // Preserve the original assertion in the test's diagnostic output.
+      if (journeyError === undefined) throw cleanupError;
+      info.annotations.push({type:'fixture-cleanup-error', description:String(cleanupError)});
+    }
   }
 });
